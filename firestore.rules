@@ -1,0 +1,17 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Products catalog document rule
+    match /app_data/{docId} {
+      allow read: if true;
+      allow write: if docId == 'products_catalog' 
+        && request.resource.data.products is list
+        && request.resource.data.products.size() <= 250;
+    }
+  }
+}

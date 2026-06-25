@@ -1,0 +1,6 @@
+{
+  "name": "Bereket Et",
+  "description": "Kasap ve bakkal ürünleri fiyat ve stok listesi. Telegram üzerinden kolayca sipariş oluşturma imkanı sunan bir Mini App.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

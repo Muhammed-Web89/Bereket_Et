@@ -2,21 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Product } from './types';
 import { INITIAL_PRODUCTS, CATEGORIES } from './data';
 import { ProductCard } from './components/ProductCard';
-import { AdminPanel } from './components/AdminPanel';
 import { CartDrawer } from './components/CartDrawer';
 import { Logo } from './components/Logo';
 import { 
   Search, 
   ShoppingCart, 
-  Shield, 
-  ShieldAlert, 
-  LogOut, 
   Filter, 
-  Sparkles, 
-  MapPin,
   ChevronRight,
   X,
-  Lock,
   Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -27,12 +20,6 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
   const [hideOutOfStock, setHideOutOfStock] = useState(false);
-  
-  // Admin Panel states
-  const [isAdminMode, setIsAdminMode] = useState(false);
-  const [isAdminOverlayOpen, setIsAdminOverlayOpen] = useState(false);
-  const [adminPasswordInput, setAdminPasswordInput] = useState('');
-  const [adminError, setAdminError] = useState('');
   
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -60,32 +47,6 @@ export default function App() {
       }
     } catch (e) {
       console.error('Telegram WebApp SDK initialization warning:', e);
-    }
-  }, []);
-
-  // Restore and verify admin session token
-  useEffect(() => {
-    const token = sessionStorage.getItem('bereket_admin_token');
-    if (token) {
-      fetch('/api/admin/verify', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      })
-      .then(res => {
-        if (res.ok) return res.json();
-        throw new Error('Invalid token');
-      })
-      .then(data => {
-        if (data.valid) {
-          setIsAdminMode(true);
-        } else {
-          sessionStorage.removeItem('bereket_admin_token');
-        }
-      })
-      .catch(() => {
-        sessionStorage.removeItem('bereket_admin_token');
-      });
     }
   }, []);
 
@@ -127,59 +88,6 @@ export default function App() {
   useEffect(() => {
     fetchProducts();
   }, []);
-
-  // Admin Toggle In Stock fallback (handles sync database update)
-  const handleToggleStock = async (productId: string) => {
-    const updated = products.map((p) => {
-      if (p.id === productId) {
-        return { ...p, inStock: !p.inStock };
-      }
-      return p;
-    });
-
-    setProducts(updated);
-    try {
-      localStorage.setItem('bereket_products', JSON.stringify(updated));
-      const token = sessionStorage.getItem('bereket_admin_token') || '';
-      await fetch('/api/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(updated),
-      });
-    } catch (err) {
-      console.error('Failed to update stock status in server:', err);
-    }
-  };
-
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-    try {
-      const response = await fetch('/api/admin/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ password: adminPasswordInput })
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok && data.success) {
-        setIsAdminMode(true);
-        setIsAdminOverlayOpen(false);
-        sessionStorage.setItem('bereket_admin_token', data.token);
-        setAdminPasswordInput('');
-      } else {
-        setAdminError(data.error || 'Şifre hatalı! Lütfen doğru şifreyi giriniz.');
-      }
-    } catch (err) {
-      setAdminError('Sunucu bağlantı hatası oluştu.');
-    }
-  };
 
   // Filters calculation
   const filteredProducts = products.filter((p) => {
@@ -224,32 +132,6 @@ export default function App() {
           {/* Right Header Navigation Panel */}
           <div className="flex items-center gap-2">
             
-            {/* Interactive Admin Mode Toggle Pin Button */}
-            {isAdminMode ? (
-              <button
-                id="btn-logout-admin"
-                onClick={() => {
-                  setIsAdminMode(false);
-                  sessionStorage.removeItem('bereket_admin_token');
-                }}
-                className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white rounded-xl px-2.5 py-1.5 sm:px-3 text-xs font-bold transition-all border border-white/25 cursor-pointer"
-                title="Yönetim Panelinden Çık"
-              >
-                <LogOut size={13} />
-                <span className="hidden sm:inline">Çıkış Yap</span>
-              </button>
-            ) : (
-              <button
-                id="btn-open-admin-dialog"
-                onClick={() => setIsAdminOverlayOpen(true)}
-                className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white rounded-xl px-2.5 py-1.5 sm:px-3 text-xs font-bold transition-all border border-white/10 cursor-pointer"
-                title="Yönetici Girişi"
-              >
-                <Shield size={13} className="text-white/80" />
-                <span className="hidden sm:inline">Yönetici</span>
-              </button>
-            )}
-
             {/* Shopping Cart Header Panel button */}
             <button
               id="btn-header-cart-toggle"
@@ -373,42 +255,6 @@ export default function App() {
       {/* Main Container Layout */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 py-6 space-y-6">
 
-        {/* Admin Dashboard Control Frame */}
-        {isAdminMode && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-50/50 border border-amber-200/60 rounded-3xl p-5 shadow-sm space-y-5"
-          >
-            <div className="flex items-center justify-between border-b border-amber-200/50 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-xs font-black text-amber-800 uppercase tracking-widest">Yönetim Paneli Aktif</span>
-              </div>
-              
-              <button
-                id="btn-fast-exit-admin"
-                onClick={() => {
-                  setIsAdminMode(false);
-                  sessionStorage.removeItem('bereket_admin_token');
-                }}
-                className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-800 bg-white hover:bg-rose-50 px-2.5 py-1.5 rounded-xl border border-rose-200 cursor-pointer"
-              >
-                Paneli Kapat
-              </button>
-            </div>
-            
-            <AdminPanel
-              products={products}
-              onAddProduct={() => {}}
-              onUpdateProduct={() => {}}
-              onDeleteProduct={() => {}}
-              onResetToDefaults={() => {}}
-              onSyncSuccess={fetchProducts}
-            />
-          </motion.div>
-        )}
-
         {/* Catalog Exploration Section */}
         <div className="space-y-4">
           
@@ -493,8 +339,7 @@ export default function App() {
                 <ProductCard
                   key={p.id}
                   product={p}
-                  isAdminMode={isAdminMode}
-                  onToggleStock={handleToggleStock}
+                  isAdminMode={false}
                 />
               ))}
             </AnimatePresence>
@@ -531,7 +376,7 @@ export default function App() {
       </footer>
 
       {/* Persistent Sticky Cart Action Bar for Mobile Users */}
-      {totalCartItemsCount > 0 && !isAdminMode && (
+      {totalCartItemsCount > 0 && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm">
           <button
             id="btn-floating-cart-bar"
@@ -552,79 +397,6 @@ export default function App() {
           </button>
         </div>
       )}
-
-      {/* Password Authentication Overlay Modal for Admin Panel */}
-      <AnimatePresence>
-        {isAdminOverlayOpen && (
-          <>
-            {/* Backdrop */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.5 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsAdminOverlayOpen(false)}
-              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
-            />
-
-            {/* Modal Screen */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="fixed inset-x-4 top-[15%] mx-auto max-w-sm z-50 bg-white rounded-3xl border border-gray-100 p-6 shadow-2xl space-y-4 text-center"
-            >
-              <div className="flex justify-center mb-1">
-                <Logo className="h-20 w-20" showText={true} />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sky-700">
-                  <Lock size={16} />
-                  <h3 className="font-sans text-sm font-bold text-gray-800">Yönetici Girişi</h3>
-                </div>
-                <button
-                  id="btn-close-admin-overlay"
-                  onClick={() => setIsAdminOverlayOpen(false)}
-                  className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleAdminLogin} className="space-y-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-gray-500 mb-1 text-left">
-                    Yönetici Şifresi
-                  </label>
-                  <input
-                    type="password"
-                    id="admin-password-input"
-                    value={adminPasswordInput}
-                    onChange={(e) => setAdminPasswordInput(e.target.value)}
-                    placeholder="••••••••"
-                    autoFocus
-                    className="w-full rounded-xl border border-gray-200 px-4 py-2.5 text-center text-sm font-bold tracking-widest text-gray-800 focus:outline-none focus:border-sky-500"
-                  />
-                </div>
-
-                {adminError && (
-                  <p className="text-xs text-rose-650 font-bold bg-rose-50 border border-rose-100 p-2.5 rounded-xl text-left">
-                    ⚠️ {adminError}
-                  </p>
-                )}
-
-                <button
-                  type="submit"
-                  id="btn-confirm-admin-login"
-                  className="w-full bg-[#24A1DE] hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl cursor-pointer text-xs transition-colors"
-                >
-                  Giriş Yap
-                </button>
-              </form>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Checkout Sidebar Cart Drawer */}
       <CartDrawer />

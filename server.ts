@@ -48,80 +48,121 @@ app.use(async (req, res, next) => {
 
 // In-memory cache to preserve products
 let inMemoryProductsCache: any[] = [];
-let googleSheetsUrl = "";
+let googleSheetsUrl = "https://docs.google.com/spreadsheets/d/1GUwZi9B0wURZko69hHtMWpSFjOOfFleOHz18iDTJ8T8/export?format=csv";
 let lastFetchTime = 0;
 const CACHE_TTL_MS = 60 * 1000; // 1 minute automatic cache TTL
 
 // Firestore DB reference (via firebase-admin)
 let db: any = null;
 
-// Robust CSV parser supporting quotes and regional settings
+// Robust CSV parser supporting quotes, languages, and regional settings
 function parseCSV(csvText: string): any[] {
   const lines = csvText.split(/\r?\n/);
-  if (lines.length <= 1) return [];
+  if (lines.length === 0) return [];
 
-  const headerLine = lines[0].toLowerCase();
-  const hasHeaders = headerLine.includes("name") || headerLine.includes("название") || headerLine.includes("price") || headerLine.includes("цена") || headerLine.includes("id");
-  
-  const startIndex = hasHeaders ? 1 : 0;
+  // Find the header row
+  let headerIndex = -1;
+  let headers: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue;
+    
+    const cols = splitCSVLine(line).map(c => c.toLowerCase().trim());
+    const isHeader = cols.some(col => 
+      col === 'id' || col === 'name' || col === 'price' || col === 'category' || col === 'instock' || col === 'unit' || col === 'description' || col === 'image' ||
+      col === 'adı' || col === 'fiyat' || col === 'kategori' || col === 'stok' || col === 'resim' || col === 'açıklama' || col === 'birim' ||
+      col === 'название' || col === 'цена' || col === 'категория' || col === 'в наличии' || col === 'описание' || col === 'единица'
+    );
+    
+    if (isHeader) {
+      headerIndex = i;
+      headers = cols;
+      break;
+    }
+  }
+
+  let startIndex = 0;
+  if (headerIndex !== -1) {
+    startIndex = headerIndex + 1;
+  } else {
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].trim() && lines[i].replace(/,/g, '').trim()) {
+        startIndex = i;
+        break;
+      }
+    }
+  }
+
   const products: any[] = [];
+
+  const getColIndex = (names: string[], defaultIdx: number): number => {
+    if (headerIndex === -1) return defaultIdx;
+    for (const name of names) {
+      const idx = headers.findIndex(h => h.includes(name));
+      if (idx !== -1) return idx;
+    }
+    return defaultIdx;
+  };
+
+  const idIdx = getColIndex(['id'], 0);
+  const nameIdx = getColIndex(['name', 'adı', 'название', 'ürün'], 1);
+  const priceIdx = getColIndex(['price', 'fiyat', 'цена', 'tutar'], 2);
+  const categoryIdx = getColIndex(['category', 'kategori', 'категория', 'bölüm'], 3);
+  const imageIdx = getColIndex(['image', 'resim', 'картинка', 'görsel', 'foto'], 4);
+  const inStockIdx = getColIndex(['instock', 'stok', 'в наличии', 'stokta'], 5);
+  const unitIdx = getColIndex(['unit', 'birim', 'единица', 'ölçü'], 6);
+  const descIdx = getColIndex(['description', 'açıklama', 'описание', 'detay'], 7);
 
   for (let i = startIndex; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (!line) continue;
+    if (!line || !line.replace(/,/g, '').trim()) continue;
 
-    // Split CSV correctly, respecting double quotes
-    const values: string[] = [];
-    let currentVal = "";
-    let inQuotes = false;
-    for (let j = 0; j < line.length; j++) {
-      const char = line[j];
-      if (char === '"') {
-        inQuotes = !inQuotes;
-      } else if (char === ',' && !inQuotes) {
-        values.push(currentVal.trim());
-        currentVal = "";
+    const cleanedValues = splitCSVLine(line);
+    if (cleanedValues.length < 2) continue;
+
+    const name = cleanedValues[nameIdx] || "";
+    if (!name) continue;
+
+    const rawId = cleanedValues[idIdx] || "";
+    const id = rawId ? rawId.toLowerCase().replace(/\s+/g, '_') : `gs_${i}`;
+    
+    let rawPrice = cleanedValues[priceIdx] || "0";
+    rawPrice = rawPrice.replace(/\s/g, '').replace(/,/g, '.');
+    const price = parseFloat(rawPrice.replace(/[^0-9.]/g, "")) || 0;
+    
+    const category = cleanedValues[categoryIdx]?.toLowerCase().trim() || "diğer";
+    
+    let image = cleanedValues[imageIdx] || "";
+    if (!image) {
+      const n = name.toLowerCase();
+      if (n.includes("kıyma") || n.includes("kiym")) {
+        image = "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("kuşbaşı") || n.includes("kusbasi")) {
+        image = "https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("antrikot") || n.includes("antrecot")) {
+        image = "https://images.unsplash.com/photo-1600891964599-f61ba0e24092?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("bonfile")) {
+        image = "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("köfte") || n.includes("kofte")) {
+        image = "https://images.unsplash.com/photo-1529042410759-befb1204b468?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("sucuk")) {
+        image = "https://images.unsplash.com/photo-1534124414484-14d9e076151d?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("kuzu") || n.includes("lamb")) {
+        image = "https://images.unsplash.com/photo-1514516345957-556ca7d90a29?w=600&auto=format&fit=crop&q=80";
+      } else if (n.includes("tavuk") || n.includes("piliç") || n.includes("chicken")) {
+        image = "https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=600&auto=format&fit=crop&q=80";
       } else {
-        currentVal += char;
+        image = "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&auto=format&fit=crop&q=80";
       }
     }
-    values.push(currentVal.trim());
 
-    // Clean quotes from outer boundaries
-    const cleanedValues = values.map(v => {
-      let val = v;
-      if (val.startsWith('"') && val.endsWith('"')) {
-        val = val.substring(1, val.length - 1);
-      }
-      return val.trim();
-    });
-
-    if (cleanedValues.length < 2) continue; // Must have name and price
-
-    // Map positional data
-    // Column A (0): ID (optional)
-    // Column B (1): Name (Название)
-    // Column C (2): Price (Цена)
-    // Column D (3): Category (Категория)
-    // Column E (4): Image URL (Картинка)
-    // Column F (5): InStock (В наличии - 'var' or 'yok', 'yes'/'no', 'да'/'нет')
-    // Column G (6): Unit (Единица измерения)
-    // Column H (7): Description (Описание)
-    
-    const id = cleanedValues[0] || `gs_${i}`;
-    const name = cleanedValues[1] || "";
-    if (!name) continue; // Skip empty product names
-
-    const price = parseFloat(cleanedValues[2]?.replace(/[^0-9.]/g, "")) || 0;
-    const category = cleanedValues[3]?.toLowerCase() || "other";
-    const image = cleanedValues[4] || "";
-    
-    const rawInStock = cleanedValues[5]?.toLowerCase();
+    const rawInStock = cleanedValues[inStockIdx]?.toLowerCase().trim();
     const inStock = rawInStock === undefined || rawInStock === "" || 
-                    rawInStock === "var" || rawInStock === "да" || rawInStock === "yes" || rawInStock === "true" || rawInStock === "1";
+                    rawInStock === "var" || rawInStock === "да" || rawInStock === "yes" || rawInStock === "true" || rawInStock === "1" || rawInStock === "aktif";
     
-    const unit = cleanedValues[6] || "кг";
-    const description = cleanedValues[7] || "";
+    const unit = cleanedValues[unitIdx] || "Kg";
+    const description = cleanedValues[descIdx] || `${name} - taze helal et dünyası kalitesiyle kapınızda.`;
 
     products.push({
       id,
@@ -136,6 +177,32 @@ function parseCSV(csvText: string): any[] {
   }
 
   return products;
+}
+
+function splitCSVLine(line: string): string[] {
+  const values: string[] = [];
+  let currentVal = "";
+  let inQuotes = false;
+  for (let j = 0; j < line.length; j++) {
+    const char = line[j];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (char === ',' && !inQuotes) {
+      values.push(currentVal.trim());
+      currentVal = "";
+    } else {
+      currentVal += char;
+    }
+  }
+  values.push(currentVal.trim());
+
+  return values.map(v => {
+    let val = v;
+    if (val.startsWith('"') && val.endsWith('"')) {
+      val = val.substring(1, val.length - 1);
+    }
+    return val.trim();
+  });
 }
 
 async function loadSettingsOnStartup() {

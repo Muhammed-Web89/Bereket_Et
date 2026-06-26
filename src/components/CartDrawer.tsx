@@ -19,18 +19,19 @@ export const CartDrawer: React.FC = () => {
   const [address, setAddress] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [showSentSuccess, setShowSentSuccess] = useState(false);
+  const [savedMessage, setSavedMessage] = useState('');
 
   const totalAmount = getCartTotal();
 
-  // Generate beautiful message for Telegram
+  // Generate beautiful message for Telegram in Russian
   const generateMessage = () => {
-    let msg = `🥩 *ЗАКАЗ BEREKET МАРКЕТ* 🌾\n`;
+    let msg = `🥩 *ЗАКАЗ BEREKET ET DÜNYASI* 🌾\n`;
     msg += `-------------------------------------------\n`;
     msg += `👤 *Клиент:* ${customerName || 'Не указан'}\n`;
     if (customerPhone) {
       msg += `📞 *Телефон:* ${customerPhone}\n`;
     }
-    msg += `🚚 *Получение:* ${deliveryType === 'gel_al' ? 'Самовывоз из магазина' : 'Доставка на адрес'}\n`;
+    msg += `🚚 *Доставка:* ${deliveryType === 'gel_al' ? 'Самовывоз' : 'Доставка на дом'}\n`;
     if (deliveryType === 'adrese_teslim' && address) {
       msg += `📍 *Адрес:* ${address}\n`;
     }
@@ -45,7 +46,7 @@ export const CartDrawer: React.FC = () => {
     msg += `-------------------------------------------\n`;
     msg += `💵 *ИТОГОВАЯ СУММА:* *${totalAmount} TL*\n`;
     msg += `-------------------------------------------\n`;
-    msg += `⚡ _Пожалуйста, отправьте это сообщение администратору t.me/Bereket_ett1 для подтверждения заказа._`;
+    msg += `⚡ _Пожалуйста, отправьте это сообщение администратору на t.me/Bereket_ett1 для подтверждения заказа._`;
     return msg;
   };
 
@@ -60,6 +61,7 @@ export const CartDrawer: React.FC = () => {
     if (cart.length === 0) return;
     
     const text = generateMessage();
+    setSavedMessage(text);
     const encodedText = encodeURIComponent(text);
     
     // Copy order text automatically to clipboard
@@ -76,6 +78,9 @@ export const CartDrawer: React.FC = () => {
 
     // Open the direct username to start chat instantly with prefilled text
     window.open(`https://t.me/Bereket_ett1?text=${encodedText}`, '_blank');
+
+    // Clear the cart on successful submit as requested by the user
+    clearCart();
   };
 
   return (
@@ -107,7 +112,7 @@ export const CartDrawer: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="font-sans text-base font-bold text-gray-800">Ваша корзина</h3>
-                  <p className="text-xs text-gray-400 font-semibold">Позиций: {cart.length}</p>
+                  <p className="text-xs text-gray-400 font-semibold">Товаров в корзине: {cart.length}</p>
                 </div>
               </div>
               <button
@@ -124,9 +129,9 @@ export const CartDrawer: React.FC = () => {
               {cart.length === 0 ? (
                 <div className="text-center py-16 flex flex-col items-center justify-center">
                   <span className="text-5xl mb-3">🛒</span>
-                  <p className="font-semibold text-gray-700">Корзина пуста</p>
+                  <p className="font-semibold text-gray-700">Ваша корзина пуста</p>
                   <p className="text-xs text-gray-400 mt-1 max-w-xs">
-                    Выберите свежее мясо, качественную бакалею и другие товары в каталоге, чтобы добавить их сюда.
+                    Выберите свежее мясо, качественные деликатесы и другие фермерские продукты из каталога, чтобы добавить их в корзину.
                   </p>
                 </div>
               ) : (
@@ -192,7 +197,7 @@ export const CartDrawer: React.FC = () => {
                     </div>
 
                     <div className="border-t border-gray-50 pt-2 flex items-center justify-between font-bold text-gray-800">
-                      <span>Итого товаров:</span>
+                      <span>Итоговая сумма:</span>
                       <span className="text-base text-sky-600">{totalAmount} TL</span>
                     </div>
                   </div>
@@ -214,7 +219,7 @@ export const CartDrawer: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="block text-[11px] font-bold text-gray-500 mb-1">Номер телефона (Рекомендуется)</label>
+                      <label className="block text-[11px] font-bold text-gray-500 mb-1">Номер телефона (рекомендуется)</label>
                       <input
                         type="tel"
                         id="cart-customer-phone"
@@ -353,15 +358,15 @@ export const CartDrawer: React.FC = () => {
                     <p className="text-xs text-emerald-600 font-bold bg-emerald-50/60 py-1.5 px-3 rounded-lg inline-block">
                       Детали заказа скопированы 📋
                     </p>
-                    <p className="text-xs text-gray-500 leading-relaxed font-medium pt-2">
-                      Чат Telegram открывается в новой вкладке. Удерживайте палец (или нажмите правой кнопкой мыши) на pole ввода и нажмите <strong>«ВСТАВИТЬ»</strong> (Paste), чтобы отправить ваш готовый заказ администратору.
+                    <p className="text-xs text-gray-500 leading-relaxed font-medium pt-2 text-left">
+                      Чат Telegram откроется в новой вкладке. Удерживайте палец (или нажмите правой кнопкой мыши) на поле ввода и нажмите <strong>«ВСТАВИТЬ»</strong> (Paste), чтобы отправить готовый текст вашего заказа администратору.
                     </p>
                   </div>
 
                   <div className="space-y-2">
                     <button
-                      id="btn-modal-reopen-tg font-bold"
-                      onClick={() => window.open(`https://t.me/Bereket_ett1?text=${encodeURIComponent(generateMessage())}`, '_blank')}
+                      id="btn-modal-reopen-tg"
+                      onClick={() => window.open(`https://t.me/Bereket_ett1?text=${encodeURIComponent(savedMessage || generateMessage())}`, '_blank')}
                       className="w-full bg-[#24A1DE] hover:bg-sky-600 text-white font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow transition-all cursor-pointer"
                     >
                       <Send size={14} />

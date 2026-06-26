@@ -66,11 +66,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       <div className="absolute top-2 right-2 z-10">
         {product.inStock ? (
           <span className="flex items-center gap-0.5 rounded-full bg-emerald-50 border border-emerald-100 px-2 py-0.5 text-[9px] font-bold text-emerald-600 shadow-xs">
-            🟢 Var
+            🟢 В наличии
           </span>
         ) : (
           <span className="flex items-center gap-0.5 rounded-full bg-rose-50 border border-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-600 shadow-xs">
-            🔴 Yok
+            🔴 Нет
           </span>
         )}
       </div>
@@ -92,7 +92,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {!product.inStock && !isAdminMode && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[0.5px]">
             <span className="rounded-lg bg-white/95 px-2.5 py-1 text-[11px] font-black text-gray-800 shadow-sm uppercase tracking-wider">
-              Tükendi
+              Распродано
             </span>
           </div>
         )}
@@ -112,7 +112,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 
         <div className="mt-auto pt-2.5 flex items-end justify-between">
           <div className="min-w-0">
-            <span className="text-[9px] text-gray-400 font-bold block">Fiyat</span>
+            <span className="text-[9px] text-gray-400 font-bold block">Цена</span>
             <div className="flex items-baseline gap-0.5 truncate">
               <span className="text-sm sm:text-base font-black text-gray-900">{product.price}</span>
               <span className="text-[10px] font-bold text-gray-500">TL/{product.unit}</span>
@@ -131,7 +131,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     : 'bg-emerald-50 text-emerald-600 border-emerald-200 hover:bg-emerald-100'
                 }`}
               >
-                {product.inStock ? 'Tükendi Yap' : 'Stokta Var'}
+                {product.inStock ? 'Распродано' : 'В наличии'}
               </button>
             </div>
           ) : (
@@ -144,7 +144,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                       id={`btn-decrease-${product.id}`}
                       onClick={handleDecrease}
                       className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-lg bg-white border border-sky-100 text-sky-600 hover:bg-sky-100 active:scale-95 transition-all cursor-pointer font-extrabold"
-                      title="Azalt"
+                      title="Уменьшить"
                     >
                       <Minus size={12} />
                     </button>
@@ -155,7 +155,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                       id={`btn-increase-${product.id}`}
                       onClick={handleIncrease}
                       className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-lg bg-sky-600 text-white hover:bg-sky-700 active:scale-95 transition-all cursor-pointer font-extrabold"
-                      title="Artır"
+                      title="Увеличить"
                     >
                       <Plus size={12} />
                     </button>
@@ -166,7 +166,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                     onClick={handleIncrease}
                     className="flex items-center gap-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white px-2.5 py-1.5 text-[10px] sm:text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer whitespace-nowrap"
                   >
-                    Ekle
+                    Добавить
                   </button>
                 )
               ) : (
@@ -174,7 +174,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
                   disabled
                   className="rounded-lg bg-gray-100 text-gray-400 px-2 py-1.5 text-[10px] sm:text-xs font-bold cursor-not-allowed whitespace-nowrap"
                 >
-                  Tükendi
+                  Распродано
                 </button>
               )}
             </div>

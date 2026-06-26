@@ -20,7 +20,13 @@ const ADMIN_SESSION_TOKEN = crypto.randomUUID
 
 const DEFAULT_PASSWORD = "Dukkanda2Ali*Var";
 
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+}
+
 app.use(express.json({ limit: "15mb" }));
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 // Robust, concurrency-safe lazy Firebase initializer for serverless/Vercel environments
 let isFirebaseInitialized = false;
@@ -508,6 +514,56 @@ app.post("/api/admin/config", async (req, res) => {
   const { googleSheetsUrl: newUrl } = req.body;
   await saveSettings(newUrl || "");
   res.json({ success: true, googleSheetsUrl });
+});
+
+// POST upload image
+app.post("/api/admin/upload-image", (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || authHeader !== `Bearer ${ADMIN_SESSION_TOKEN}`) {
+    return res.status(401).json({ error: "Yetkisiz işlem!" });
+  }
+
+  const { image, name } = req.body;
+  if (!image) {
+    return res.status(400).json({ error: "Görsel verisi eksik!" });
+  }
+
+  try {
+    // Expecting base64 string: "data:image/jpeg;base64,..."
+    const matches = image.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-+.]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      return res.status(400).json({ error: "Geçersiz görsel biçimi!" });
+    }
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, "base64");
+
+    // Determine extension
+    let extension = "jpg";
+    if (mimeType.includes("png")) extension = "png";
+    else if (mimeType.includes("webp")) extension = "webp";
+    else if (mimeType.includes("gif")) extension = "gif";
+    else if (mimeType.includes("svg")) extension = "svg";
+
+    // Clean name
+    const cleanName = (name || "product")
+      .toLowerCase()
+      .replace(/[^a-zA-Z0-9]/g, "_")
+      .substring(0, 30);
+    const uniqueId = Math.random().toString(36).substring(2, 8);
+    const filename = `${cleanName}_${Date.now()}_${uniqueId}.${extension}`;
+    const filePath = path.join(UPLOADS_DIR, filename);
+
+    fs.writeFileSync(filePath, buffer);
+
+    // Return the relative URL (will work perfectly on current host)
+    const relativeUrl = `/uploads/${filename}`;
+    res.json({ success: true, url: relativeUrl, filename });
+  } catch (err: any) {
+    console.error("❌ Image upload failed:", err);
+    res.status(500).json({ error: "Görsel kaydedilirken bir hata oluştu!" });
+  }
 });
 
 // POST manual synchronization trigger

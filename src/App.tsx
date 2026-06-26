@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Product, CartItem } from './types';
+import { Product } from './types';
 import { INITIAL_PRODUCTS, CATEGORIES } from './data';
 import { ProductCard } from './components/ProductCard';
 import { AdminPanel } from './components/AdminPanel';
 import { CartDrawer } from './components/CartDrawer';
 import { Logo } from './components/Logo';
 import { 
-  Store, 
   Search, 
   ShoppingCart, 
   Shield, 
@@ -14,49 +13,47 @@ import {
   LogOut, 
   Filter, 
   Sparkles, 
-  MessageSquare,
   MapPin,
   ChevronRight,
-  ChevronLeft,
   X,
   Lock,
   Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useCartStore } from './store/cartStore';
 
 export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<string>('all');
   const [hideOutOfStock, setHideOutOfStock] = useState(false);
   
-  // Custom states for admin flow
+  // Admin Panel states
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [isAdminOverlayOpen, setIsAdminOverlayOpen] = useState(false);
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [adminError, setAdminError] = useState('');
   
-  const [isCartOpen, setIsCartOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Initialize Telegram WebApp settings to prevent scrolling-collapse issues and open full screen
+  // Zustand Store values
+  const { 
+    setCartOpen, 
+    getTotalCount 
+  } = useCartStore();
+
+  const totalCartItemsCount = getTotalCount();
+
+  // Initialize Telegram WebApp settings
   useEffect(() => {
     try {
       const tg = (window as any).Telegram?.WebApp;
       if (tg) {
-        // Inform Telegram that the app is ready and fully loaded
         tg.ready();
-        
-        // Expand the mini app to its maximum height immediately on launch
         tg.expand();
-        
-        // Disable swipe down to dismiss/minimize the Web App (requires Bot API 7.7+)
         if (typeof tg.disableVerticalSwipes === 'function') {
           tg.disableVerticalSwipes();
         }
-
-        // Enable header color customization, optionally matching theme
         if (tg.setHeaderColor) {
           tg.setHeaderColor('bg_color');
         }
@@ -66,7 +63,7 @@ export default function App() {
     }
   }, []);
 
-  // Restore admin mode from sessionStorage if a token already exists
+  // Restore and verify admin session token
   useEffect(() => {
     const token = sessionStorage.getItem('bereket_admin_token');
     if (token) {
@@ -76,9 +73,7 @@ export default function App() {
         }
       })
       .then(res => {
-        if (res.ok) {
-          return res.json();
-        }
+        if (res.ok) return res.json();
         throw new Error('Invalid token');
       })
       .then(data => {
@@ -89,151 +84,76 @@ export default function App() {
         }
       })
       .catch(() => {
-        // Safe to ignore network problems during check
         sessionStorage.removeItem('bereket_admin_token');
       });
     }
   }, []);
 
-  // Fetch products from server on mount
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const response = await fetch('/api/products');
-        if (response.ok) {
-          const data = await response.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setProducts(data);
-            try {
-              localStorage.setItem('bereket_products', JSON.stringify(data));
-            } catch (err) {
-              console.error(err);
-            }
-            return;
+  // Core product loading API
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('/api/products');
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setProducts(data);
+          try {
+            localStorage.setItem('bereket_products', JSON.stringify(data));
+          } catch (err) {
+            console.error(err);
           }
+          return;
         }
-      } catch (err) {
-        console.error('Failed to fetch from server API', err);
       }
+    } catch (err) {
+      console.error('Failed to fetch from server API', err);
+    }
 
-      // Fallback to localStorage or default seed catalog
-      try {
-        const stored = localStorage.getItem('bereket_products');
-        if (stored) {
-          setProducts(JSON.parse(stored));
-        } else {
-          setProducts(INITIAL_PRODUCTS);
-          localStorage.setItem('bereket_products', JSON.stringify(INITIAL_PRODUCTS));
-        }
-      } catch (e) {
-        console.error('LocalStorage is not available', e);
+    // Fallback locally
+    try {
+      const stored = localStorage.getItem('bereket_products');
+      if (stored) {
+        setProducts(JSON.parse(stored));
+      } else {
         setProducts(INITIAL_PRODUCTS);
+        localStorage.setItem('bereket_products', JSON.stringify(INITIAL_PRODUCTS));
       }
-    };
+    } catch (e) {
+      console.error('LocalStorage not available', e);
+      setProducts(INITIAL_PRODUCTS);
+    }
+  };
 
+  useEffect(() => {
     fetchProducts();
   }, []);
 
-  // Save product state wrapper (persists on server & updates local storage)
-  const saveProducts = async (newProducts: Product[]) => {
-    setProducts(newProducts);
-    // 1. Local backup
-    try {
-      localStorage.setItem('bereket_products', JSON.stringify(newProducts));
-    } catch (e) {
-      console.error('Failed to save to localStorage', e);
-    }
+  // Admin Toggle In Stock fallback (handles sync database update)
+  const handleToggleStock = async (productId: string) => {
+    const updated = products.map((p) => {
+      if (p.id === productId) {
+        return { ...p, inStock: !p.inStock };
+      }
+      return p;
+    });
 
-    // 2. Server persistence
+    setProducts(updated);
     try {
+      localStorage.setItem('bereket_products', JSON.stringify(updated));
       const token = sessionStorage.getItem('bereket_admin_token') || '';
-      const response = await fetch('/api/products', {
+      await fetch('/api/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(newProducts),
+        body: JSON.stringify(updated),
       });
-      if (!response.ok) {
-        console.error('Failed to persist products to server. Status:', response.status);
-      }
     } catch (err) {
-      console.error('Error saving products to server:', err);
+      console.error('Failed to update stock status in server:', err);
     }
   };
 
-  // Add Product (Admin action)
-  const handleAddProduct = (newProd: Omit<Product, 'id'>) => {
-    const id = 'custom_' + Date.now();
-    const product: Product = { ...newProd, id };
-    const updated = [product, ...products];
-    saveProducts(updated);
-  };
-
-  // Update Product details (Admin action)
-  const handleUpdateProduct = (updatedProd: Product) => {
-    const updated = products.map((p) => (p.id === updatedProd.id ? updatedProd : p));
-    saveProducts(updated);
-  };
-
-  // Toggle inStock directly (Super handy inline admin switch!)
-  const handleToggleStock = (productId: string) => {
-    const updated = products.map((p) => {
-      if (p.id === productId) {
-        const nextState = !p.inStock;
-        // If becoming out of stock, remove from cart
-        if (!nextState) {
-          setCart(prev => prev.filter(item => item.product.id !== productId));
-        }
-        return { ...p, inStock: nextState };
-      }
-      return p;
-    });
-    saveProducts(updated);
-  };
-
-  // Delete Product completely (Admin action)
-  const handleDeleteProduct = (id: string) => {
-    const updated = products.filter((p) => p.id !== id);
-    saveProducts(updated);
-    // Remove from Cart
-    setCart((prev) => prev.filter((item) => item.product.id !== id));
-  };
-
-  // Reset database back to seed list (Admin action)
-  const handleResetToDefaults = () => {
-    saveProducts(INITIAL_PRODUCTS);
-    setCart([]);
-  };
-
-  // Cart quantity changes
-  const handleUpdateCartQuantity = (productId: string, quantity: number) => {
-    const product = products.find((p) => p.id === productId);
-    if (!product) return;
-
-    if (quantity <= 0) {
-      setCart((prev) => prev.filter((item) => item.product.id !== productId));
-    } else {
-      setCart((prev) => {
-        const exists = prev.find((item) => item.product.id === productId);
-        if (exists) {
-          return prev.map((item) =>
-            item.product.id === productId ? { ...item, quantity } : item
-          );
-        } else {
-          return [...prev, { product, quantity }];
-        }
-      });
-    }
-  };
-
-  // Reset cart
-  const handleClearCart = () => {
-    setCart([]);
-  };
-
-  // Admin login check on the secure back-end API
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
@@ -254,14 +174,14 @@ export default function App() {
         sessionStorage.setItem('bereket_admin_token', data.token);
         setAdminPasswordInput('');
       } else {
-        setAdminError(data.error || 'Şifre hatalı! Yalnızca mağaza yöneticisi erişebilir.');
+        setAdminError(data.error || 'Şifre hatalı! Lütfen doğru şifreyi giriniz.');
       }
     } catch (err) {
-      setAdminError('Sunucu bağlantı hatası oluştu. Lütfen tekrar deneyin.');
+      setAdminError('Sunucu bağlantı hatası oluştu.');
     }
   };
 
-  // Filter & Search criteria computation
+  // Filters calculation
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
                           (p.description || '').toLowerCase().includes(searchQuery.toLowerCase());
@@ -269,8 +189,6 @@ export default function App() {
     const matchesStock = !hideOutOfStock || p.inStock;
     return matchesSearch && matchesCategory && matchesStock;
   });
-
-  const totalCartItemsCount = cart.reduce((acc, item) => acc + item.quantity, 0);
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans select-none antialiased text-gray-800">
@@ -303,100 +221,96 @@ export default function App() {
             </div>
           </div>
 
+          {/* Right Header Navigation Panel */}
           <div className="flex items-center gap-2">
-            {/* Admin Console Switcher */}
+            
+            {/* Interactive Admin Mode Toggle Pin Button */}
             {isAdminMode ? (
               <button
                 id="btn-logout-admin"
-                onClick={() => setIsAdminMode(false)}
-                className="flex items-center gap-1 text-xs font-bold bg-rose-500/25 border border-rose-400/40 hover:bg-rose-500 text-white rounded-xl px-3 py-2 transition-all cursor-pointer"
+                onClick={() => {
+                  setIsAdminMode(false);
+                  sessionStorage.removeItem('bereket_admin_token');
+                }}
+                className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white rounded-xl px-2.5 py-1.5 sm:px-3 text-xs font-bold transition-all border border-white/25 cursor-pointer"
+                title="Yönetim Panelinden Çık"
               >
                 <LogOut size={13} />
-                <span className="hidden sm:inline">Выйти из админки</span>
+                <span className="hidden sm:inline">Çıkış Yap</span>
               </button>
             ) : (
               <button
-                id="btn-open-admin-overlay"
+                id="btn-open-admin-dialog"
                 onClick={() => setIsAdminOverlayOpen(true)}
-                className="flex items-center gap-1.5 text-xs font-bold bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl px-3 py-2 transition-all cursor-pointer"
+                className="flex items-center gap-1 bg-white/10 hover:bg-white/20 text-white rounded-xl px-2.5 py-1.5 sm:px-3 text-xs font-bold transition-all border border-white/10 cursor-pointer"
+                title="Yönetici Girişi"
               >
-                <Shield size={13} className="text-amber-200" />
-                <span>Администратор</span>
+                <Shield size={13} className="text-white/80" />
+                <span className="hidden sm:inline">Yönetici</span>
               </button>
             )}
 
-            {/* Shopping Cart Trigger Icon */}
+            {/* Shopping Cart Header Panel button */}
             <button
-              id="btn-open-cart-floating"
-              onClick={() => setIsCartOpen(true)}
-              className="relative rounded-xl bg-white text-sky-700 hover:bg-sky-50 font-bold p-2.5 shadow-sm transition-all flex items-center justify-center cursor-pointer"
-              title="Корзина"
+              id="btn-header-cart-toggle"
+              onClick={() => setCartOpen(true)}
+              className="flex items-center gap-1.5 bg-amber-400 hover:bg-amber-500 text-gray-900 rounded-xl px-3.5 py-2 text-xs font-black transition-all cursor-pointer shadow-md hover:shadow-lg active:scale-95"
             >
-              <ShoppingCart size={18} />
+              <ShoppingCart size={13} className="stroke-[2.5]" />
+              <span>Sepet</span>
               {totalCartItemsCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 text-[10px] font-black text-white ring-2 ring-white">
+                <span className="bg-white text-[#24A1DE] text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center shadow-xs animate-pulse">
                   {totalCartItemsCount}
                 </span>
               )}
             </button>
+
           </div>
         </div>
       </header>
 
-      {/* Mobile Sidebar Category Menu (Toggle Menu) */}
+      {/* Side Slide Mobile Navigation Drawer */}
       <AnimatePresence>
         {isMobileMenuOpen && (
           <>
-            {/* Backdrop Overlay */}
+            {/* Backdrop cover overlay */}
             <motion.div
-              id="mobile-menu-backdrop"
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.5 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black z-40 cursor-pointer"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
             />
 
-            {/* Sidebar Panel Slide-in from Left */}
+            {/* Dynamic Drawer Sheet */}
             <motion.div
-              id="mobile-menu-drawer"
-              initial={{ x: "-100%" }}
+              initial={{ x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="fixed top-0 bottom-0 left-0 w-72 max-w-[85vw] bg-white z-50 shadow-2xl flex flex-col text-left font-sans"
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 220 }}
+              className="fixed left-0 top-0 z-50 h-full w-full max-w-xs bg-white shadow-2xl flex flex-col"
             >
-              {/* Header inside side drawer */}
-              <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-sky-50/40">
-                <div className="flex items-center gap-2 text-left">
-                  <Logo className="h-9 w-9 shrink-0 bg-white p-0.5 rounded-xl shadow-sm border border-gray-100" showText={false} />
-                  <div className="flex flex-col font-sans uppercase leading-none select-none text-sky-950">
-                    <span className="text-[11px] font-black tracking-wider">
-                      BEREKET ET
-                    </span>
-                    <span className="text-[10px] font-black tracking-wider text-amber-600 mt-0.5">
-                      DÜNYASI
-                    </span>
-                  </div>
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-gray-50/50">
+                <div className="flex items-center gap-2">
+                  <Logo className="h-8 w-8" showText={false} />
+                  <span className="text-xs font-black tracking-wider text-gray-800 uppercase">KATEGORİLER</span>
                 </div>
                 <button
                   id="btn-close-mobile-menu"
                   onClick={() => setIsMobileMenuOpen(false)}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-all text-gray-500 hover:text-gray-800 cursor-pointer"
-                  title="Kapat"
-                  aria-label="Kapat"
+                  className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-150 hover:text-gray-700 cursor-pointer"
                 >
                   <X size={18} />
                 </button>
               </div>
 
-              {/* Category Options Body */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                <p className="text-[10px] font-medium uppercase text-gray-400 tracking-widest mb-3 px-1">
-                  Категории / Kategoriler
+              {/* Scrollable Categories List inside menu */}
+              <div className="flex-1 overflow-y-auto p-3 space-y-1 text-left">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-3.5 mb-2 block">
+                  Mağaza Bölümleri
                 </p>
 
-                {/* "Все" (Show All) option */}
+                {/* Show All option */}
                 <button
                   id="mobile-menu-tab-all"
                   onClick={() => {
@@ -411,7 +325,7 @@ export default function App() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-sm">🔍</span>
-                    <span>Все товары</span>
+                    <span>Tüm Ürünler</span>
                   </div>
                   <span className="text-[10px] bg-gray-100 text-gray-500 font-bold px-2 py-0.5 rounded-md">
                     {products.length}
@@ -447,10 +361,9 @@ export default function App() {
                 })}
               </div>
 
-              {/* Informative Footer within drawer */}
               <div className="p-4 border-t border-gray-100 bg-gray-50 text-[10px] text-gray-400 space-y-1">
                 <p className="font-extrabold text-gray-700 text-[11px] tracking-wide">BEREKET ET DÜNYASI</p>
-                <p className="text-gray-400">Свежие продукты с доставкой.</p>
+                <p className="text-gray-400">Taze helal et ve şarküteri ürünleri.</p>
               </div>
             </motion.div>
           </>
@@ -470,7 +383,7 @@ export default function App() {
             <div className="flex items-center justify-between border-b border-amber-200/50 pb-3">
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
-                <span className="text-xs font-black text-amber-800 uppercase tracking-widest">Авторизован: Режим управления</span>
+                <span className="text-xs font-black text-amber-800 uppercase tracking-widest">Yönetim Paneli Aktif</span>
               </div>
               
               <button
@@ -481,16 +394,17 @@ export default function App() {
                 }}
                 className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-800 bg-white hover:bg-rose-50 px-2.5 py-1.5 rounded-xl border border-rose-200 cursor-pointer"
               >
-                Закрыть панель
+                Paneli Kapat
               </button>
             </div>
             
             <AdminPanel
               products={products}
-              onAddProduct={handleAddProduct}
-              onUpdateProduct={handleUpdateProduct}
-              onDeleteProduct={handleDeleteProduct}
-              onResetToDefaults={handleResetToDefaults}
+              onAddProduct={() => {}}
+              onUpdateProduct={() => {}}
+              onDeleteProduct={() => {}}
+              onResetToDefaults={() => {}}
+              onSyncSuccess={fetchProducts}
             />
           </motion.div>
         )}
@@ -512,7 +426,7 @@ export default function App() {
                     : 'bg-gray-100 text-gray-500 hover:text-gray-800'
                 }`}
               >
-                🔍 Все ({products.length})
+                🔍 Hepsi ({products.length})
               </button>
               {CATEGORIES.map((cat) => (
                 <button
@@ -521,8 +435,8 @@ export default function App() {
                   onClick={() => setActiveTab(cat.id)}
                   className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex-shrink-0 ${
                     activeTab === cat.id
-                      ? 'bg-sky-650 text-white shadow-sm font-semibold'
-                      : 'bg-gray-150 text-gray-600 hover:bg-gray-200'
+                      ? 'bg-[#24A1DE] text-white shadow-sm font-semibold'
+                      : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                   }`}
                 >
                   <span className="mr-1">{cat.emoji}</span>
@@ -545,7 +459,7 @@ export default function App() {
                 }`}
               >
                 <Filter size={13} />
-                Только в наличии
+                Sadece Stokta Olanlar
               </button>
 
               {/* Dynamic search bar */}
@@ -556,7 +470,7 @@ export default function App() {
                   id="catalog-search"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Поиск товаров..."
+                  placeholder="Ürün ara..."
                   className="w-full sm:w-64 rounded-xl border border-gray-250 bg-white pl-9 pr-4 py-2 text-xs font-medium text-gray-700 focus:outline-none focus:border-sky-500"
                 />
                 {searchQuery && (
@@ -572,24 +486,17 @@ export default function App() {
 
           </div>
 
-          {/* Catalog Listing Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+          {/* Catalog Listing Grid - Exactly 2 Columns on Mobile to prevent full screen takeover */}
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
             <AnimatePresence>
-              {filteredProducts.map((p) => {
-                const itemInCart = cart.find((item) => item.product.id === p.id);
-                const quantity = itemInCart ? itemInCart.quantity : 0;
-                
-                return (
-                  <ProductCard
-                    key={p.id}
-                    product={p}
-                    quantityInCart={quantity}
-                    onUpdateQuantity={handleUpdateCartQuantity}
-                    isAdminMode={isAdminMode}
-                    onToggleStock={handleToggleStock}
-                  />
-                );
-              })}
+              {filteredProducts.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  isAdminMode={isAdminMode}
+                  onToggleStock={handleToggleStock}
+                />
+              ))}
             </AnimatePresence>
           </div>
 
@@ -597,9 +504,9 @@ export default function App() {
           {filteredProducts.length === 0 && (
             <div className="bg-white rounded-3xl border border-gray-100 py-16 text-center shadow-sm">
               <span className="text-4xl text-gray-300 block mb-2">🔎</span>
-              <p className="font-bold text-gray-700">Товары не найдены</p>
+              <p className="font-bold text-gray-700">Ürün bulunamadı</p>
               <p className="text-xs text-gray-400 mt-1">
-                Попробуйте изменить категорию или изменить параметры поиска.
+                Lütfen arama kelimenizi veya seçtiğiniz kategoriyi değiştirip deneyin.
               </p>
             </div>
           )}
@@ -618,7 +525,7 @@ export default function App() {
             BEREKET ET DÜNYASI
           </p>
           <p className="text-[10px] leading-relaxed text-gray-400 font-medium max-w-sm mx-auto">
-            Официальный магазин «Bereket Et Dünyası» — свежее мясо халяль, отборная бакалея и качественные фермерские продукты. Все права защищены © 2026.
+            Официальный магазин «Bereket Et Dünyası» — taze helal et, kaliteli şarküteri ve çiftlik ürünleri. Her hakkı saklıdır © 2026.
           </p>
         </div>
       </footer>
@@ -628,18 +535,18 @@ export default function App() {
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-[90%] max-w-sm">
           <button
             id="btn-floating-cart-bar"
-            onClick={() => setIsCartOpen(true)}
-            className="w-full bg-[#24A1DE] text-white font-bold py-3.5 px-5 rounded-2xl shadow-xl hover:shadow-2xl transition-all cursor-pointer flex items-center justify-between"
+            onClick={() => setCartOpen(true)}
+            className="w-full bg-[#24A1DE] text-white font-bold py-3.5 px-5 rounded-2xl shadow-xl hover:shadow-2xl transition-all cursor-pointer flex items-center justify-between animate-bounce"
           >
             <div className="flex items-center gap-2">
               <div className="bg-white/20 p-1.5 rounded-lg">
                 <ShoppingCart size={16} />
               </div>
-              <span className="text-xs">Выбрано позиций: {totalCartItemsCount}</span>
+              <span className="text-xs">Sepette {totalCartItemsCount} ürün var</span>
             </div>
             
             <span className="text-xs font-black bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-xl flex items-center gap-0.5">
-              В корзину
+              Sepeti Aç
               <ChevronRight size={12} />
             </span>
           </button>
@@ -673,7 +580,7 @@ export default function App() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sky-700">
                   <Lock size={16} />
-                  <h3 className="font-sans text-sm font-bold text-gray-800">Вход для администрации</h3>
+                  <h3 className="font-sans text-sm font-bold text-gray-800">Yönetici Girişi</h3>
                 </div>
                 <button
                   id="btn-close-admin-overlay"
@@ -687,7 +594,7 @@ export default function App() {
               <form onSubmit={handleAdminLogin} className="space-y-4">
                 <div>
                   <label className="block text-[11px] font-bold text-gray-500 mb-1 text-left">
-                    Системный пароль
+                    Yönetici Şifresi
                   </label>
                   <input
                     type="password"
@@ -711,7 +618,7 @@ export default function App() {
                   id="btn-confirm-admin-login"
                   className="w-full bg-[#24A1DE] hover:bg-sky-600 text-white font-bold py-2.5 px-4 rounded-xl cursor-pointer text-xs transition-colors"
                 >
-                  Войти
+                  Giriş Yap
                 </button>
               </form>
             </motion.div>
@@ -720,13 +627,7 @@ export default function App() {
       </AnimatePresence>
 
       {/* Checkout Sidebar Cart Drawer */}
-      <CartDrawer
-        isOpen={isCartOpen}
-        onClose={() => setIsCartOpen(false)}
-        cart={cart}
-        onUpdateQuantity={handleUpdateCartQuantity}
-        onClearCart={handleClearCart}
-      />
+      <CartDrawer />
 
     </div>
   );

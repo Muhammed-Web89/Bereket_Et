@@ -1,23 +1,18 @@
 import React, { useState } from 'react';
-import { CartItem } from '../types';
+import { useCartStore } from '../store/cartStore';
 import { X, Send, ShoppingBag, Trash2, Copy, Check, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
-interface CartDrawerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  cart: CartItem[];
-  onUpdateQuantity: (productId: string, quantity: number) => void;
-  onClearCart: () => void;
-}
+export const CartDrawer: React.FC = () => {
+  const { 
+    cart, 
+    isCartOpen, 
+    setCartOpen, 
+    updateQuantity, 
+    clearCart, 
+    getCartTotal 
+  } = useCartStore();
 
-export const CartDrawer: React.FC<CartDrawerProps> = ({
-  isOpen,
-  onClose,
-  cart,
-  onUpdateQuantity,
-  onClearCart
-}) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryType, setDeliveryType] = useState<'gel_al' | 'adrese_teslim'>('gel_al');
@@ -25,10 +20,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
   const [isCopied, setIsCopied] = useState(false);
   const [showSentSuccess, setShowSentSuccess] = useState(false);
 
-  const totalAmount = cart.reduce(
-    (total, item) => total + item.product.price * item.quantity,
-    0
-  );
+  const totalAmount = getCartTotal();
 
   // Generate beautiful message for Telegram
   const generateMessage = () => {
@@ -88,14 +80,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
 
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isCartOpen && (
         <>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 0.5 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={() => setCartOpen(false)}
             className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
           />
 
@@ -120,7 +112,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
               </div>
               <button
                 id="btn-close-cart"
-                onClick={onClose}
+                onClick={() => setCartOpen(false)}
                 className="rounded-lg p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
               >
                 <X size={20} />
@@ -145,7 +137,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Выбранные товары</span>
                       <button
                         id="btn-clear-cart"
-                        onClick={onClearCart}
+                        onClick={clearCart}
                         className="flex items-center gap-1 text-[11px] font-bold text-rose-500 hover:text-rose-700 cursor-pointer"
                       >
                         <Trash2 size={12} />
@@ -157,12 +149,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       {cart.map((item) => (
                         <div key={item.product.id} className="flex items-center justify-between gap-3 text-sm">
                           <div className="flex items-center gap-2 min-w-0">
-                            <img
-                              src={item.product.image}
-                              alt={item.product.name}
-                              className="h-10 w-10 rounded-lg object-cover flex-shrink-0"
-                              referrerPolicy="no-referrer"
-                            />
+                            {item.product.image && (
+                              <img
+                                src={item.product.image}
+                                alt={item.product.name}
+                                className="h-10 w-10 rounded-lg object-cover flex-shrink-0"
+                                referrerPolicy="no-referrer"
+                              />
+                            )}
                             <div className="truncate">
                               <p className="font-semibold text-gray-800 truncate" title={item.product.name}>
                                 {item.product.name}
@@ -177,7 +171,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                           <div className="flex items-center gap-2 bg-gray-50 rounded-lg p-1 border border-gray-100 flex-shrink-0">
                             <button
                               id={`cart-decrease-${item.product.id}`}
-                              onClick={() => onUpdateQuantity(item.product.id, item.quantity - 1)}
+                              onClick={() => updateQuantity(item.product.id, item.quantity - 1)}
                               className="h-6 w-6 rounded bg-white border border-gray-100 text-gray-500 flex items-center justify-center hover:bg-gray-100 cursor-pointer font-bold"
                             >
                               -
@@ -187,7 +181,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                             </span>
                             <button
                               id={`cart-increase-${item.product.id}`}
-                              onClick={() => onUpdateQuantity(item.product.id, item.quantity + 1)}
+                              onClick={() => updateQuantity(item.product.id, item.quantity + 1)}
                               className="h-6 w-6 rounded bg-sky-600 text-white flex items-center justify-center hover:bg-sky-700 cursor-pointer font-bold"
                             >
                               +
@@ -360,7 +354,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       Детали заказа скопированы 📋
                     </p>
                     <p className="text-xs text-gray-500 leading-relaxed font-medium pt-2">
-                      Чат Telegram открывается в новой вкладке. Удерживайте палец (или нажмите правой кнопкой мыши) на поле ввода и нажмите <strong>«ВСТАВИТЬ»</strong> (Paste), чтобы отправить ваш готовый заказ администратору.
+                      Чат Telegram открывается в новой вкладке. Удерживайте палец (или нажмите правой кнопкой мыши) на pole ввода и нажмите <strong>«ВСТАВИТЬ»</strong> (Paste), чтобы отправить ваш готовый заказ администратору.
                     </p>
                   </div>
 
@@ -378,7 +372,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({
                       id="btn-modal-close"
                       onClick={() => {
                         setShowSentSuccess(false);
-                        onClose();
+                        setCartOpen(false);
                       }}
                       className="w-full bg-gray-50 hover:bg-gray-100 text-gray-500 font-bold py-2 px-4 rounded-xl text-xs transition-colors cursor-pointer"
                     >

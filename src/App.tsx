@@ -600,16 +600,8 @@ export default function App() {
             BEREKET ET DÜNYASI
           </p>
           <p className="text-[10px] leading-relaxed text-gray-400 font-medium max-w-sm mx-auto">
-            «Bereket Et Dünyası» Resmi Mağazası — taze helal et, kaliteli şarküteri ve çiftlik ürünleri. Tüm hakları saklıdır © 2026.
+            Официальный магазин «Bereket Et Dünyası» — свежее халяльное мясо, качественные деликатесы и фермерские продукты. Все права защищены © 2026.
           </p>
-          <div>
-            <button
-              onClick={() => setIsAdminOpen(true)}
-              className="text-gray-300 hover:text-[#24A1DE] mt-4 text-[10px] uppercase tracking-widest font-extrabold transition-colors cursor-pointer"
-            >
-              🔑 Yönetici Paneli & Görsel Yükleyici
-            </button>
-          </div>
         </div>
       </footer>
 

@@ -61,6 +61,30 @@ const CACHE_TTL_MS = 60 * 1000; // 1 minute automatic cache TTL
 // Firestore DB reference (via firebase-admin)
 let db: any = null;
 
+function normalizeCategoryServer(cat: string): string {
+  const c = (cat || "").toLowerCase().trim();
+  
+  if (c === "myaso" || c === "meat" || c === "et" || c.includes("мясо")) return "myaso";
+  if (c === "ryba" || c === "fish" || c === "balik" || c === "balık" || c.includes("рыба")) return "ryba";
+  if (c === "molochnoe" || c === "dairy" || c === "sut" || c === "süt" || c.includes("şarküteri") || c.includes("sarkuteri") || c.includes("молоч") || c.includes("молок")) return "molochnoe";
+  if (c === "detskoe" || c === "baby" || c === "bebek" || c === "cocuk" || c === "çocuk" || c.includes("детск") || c.includes("дети")) return "detskoe";
+  if (c === "polufabrikaty" || c === "semi_finished" || c === "hazir" || c === "hazır" || c.includes("полуфабрикат")) return "polufabrikaty";
+  if (c === "konservy" || c === "canned" || c === "konserve" || c.includes("консерв")) return "konservy";
+  if (c === "krupy" || c === "grains" || c === "bakliyat" || c === "tahıl" || c === "tahil" || c.includes("круп") || c.includes("бакале")) return "krupy";
+  if (c === "orehi" || c === "nuts" || c === "kuruyemis" || c === "kuruyemiş" || c.includes("орех") || c.includes("сухофрукт")) return "orehi";
+  if (c === "specii" || c === "spices" || c === "sauces" || c === "sos" || c === "baharat" || c === "yag" || c === "yağ" || c.includes("специ") || c.includes("соус") || c.includes("масл")) return "specii";
+  if (c === "shokolad" || c === "chocolate" || c === "cikolata" || c === "çikolata" || c.includes("шоколад")) return "shokolad";
+  if (c === "konfety" || c === "candy" || c === "seker" || c === "şeker" || c.includes("сладост") || c.includes("конфет")) return "konfety";
+  if (c === "karamel" || c === "caramel" || c.includes("карамел")) return "karamel";
+  if (c === "vypechka" || c === "bakery" || c === "firin" || c === "fırın" || c === "ekmek" || c === "pasta" || c.includes("выпеч") || c.includes("кондитер")) return "vypechka";
+  if (c === "napitki" || c === "beverages" || c === "icecek" || c === "içecek" || c.includes("напит")) return "napitki";
+  if (c === "chay_kofe" || c === "tea_coffee" || c === "cay" || c === "çay" || c === "kahve" || c.includes("чай") || c.includes("кофе")) return "chay_kofe";
+  if (c === "himiya" || c === "household_chem" || c === "kimya" || c === "deterjan" || c === "temizlik" || c.includes("хим") || c.includes("гигиен")) return "himiya";
+  if (c === "posuda" || c === "household_goods" || c === "ev" || c === "zuccaciye" || c === "züccaciye" || c.includes("посуд") || c.includes("дом")) return "posuda";
+  
+  return "drugoe";
+}
+
 // Robust CSV parser supporting quotes, languages, and regional settings
 function parseCSV(csvText: string): any[] {
   const lines = csvText.split(/\r?\n/);
@@ -137,7 +161,7 @@ function parseCSV(csvText: string): any[] {
     rawPrice = rawPrice.replace(/\s/g, '').replace(/,/g, '.');
     const price = parseFloat(rawPrice.replace(/[^0-9.]/g, "")) || 0;
     
-    const category = cleanedValues[categoryIdx]?.toLowerCase().trim() || "diğer";
+    const category = normalizeCategoryServer(cleanedValues[categoryIdx]);
     
     let image = cleanedValues[imageIdx] || "";
     if (!image) {

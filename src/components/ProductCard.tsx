@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Product } from '../types';
 import { useCartStore } from '../store/cartStore';
 import { CheckCircle2, XCircle, Plus, Minus, ShoppingCart } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CATEGORIES } from '../data';
+import { ImageLightbox } from './ImageLightbox';
 
 interface ProductCardProps {
   product: Product;
@@ -23,6 +24,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   
   const updateQuantity = useCartStore((state) => state.updateQuantity);
   const addToCart = useCartStore((state) => state.addToCart);
+  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   const handleIncrease = () => {
     if (quantityInCart > 0) {
@@ -81,8 +83,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           <img
             src={product.image}
             alt={product.name}
-            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+            className="h-full w-full object-cover transition-transform duration-500 hover:scale-105 cursor-zoom-in"
             referrerPolicy="no-referrer"
+            onClick={() => setIsLightboxOpen(true)}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-100 text-gray-400">
@@ -97,6 +100,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           </div>
         )}
       </div>
+
+      {/* Full screen immersive Lightbox for high detail view & touch zoom */}
+      {isLightboxOpen && product.image && (
+        <ImageLightbox
+          isOpen={isLightboxOpen}
+          onClose={() => setIsLightboxOpen(false)}
+          src={product.image}
+          alt={product.name}
+        />
+      )}
 
       {/* Product Information */}
       <div className="flex flex-1 flex-col p-2.5 sm:p-4 text-left">
